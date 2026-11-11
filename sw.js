@@ -1,4 +1,4 @@
-const CACHE_NAME = 'fechas-importantes-v2';
+const CACHE_NAME = 'fechas-importantes-v3';
 const ASSETS = [
   './',
   './index.html',

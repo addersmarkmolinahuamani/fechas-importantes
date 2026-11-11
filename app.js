@@ -876,6 +876,131 @@
     showToast('Copia .json descargada');
   }
 
+  function mergeImportedEvents(list) {
+    const valid = list.filter(isValidEvent);
+    if (valid.length === 0) return { added: 0, skipped: 0 };
+
+    const existingIds = new Set(events.map((e) => e.id));
+    const existingFingerprints = new Set(
+      events.map((e) => `${e.name.trim().toLowerCase()}|${e.month}|${e.day}|${e.year ?? ''}`)
+    );
+
+    let added = 0;
+    let skipped = 0;
+
+    for (const item of valid) {
+      const year = typeof item.year === 'number' ? item.year : null;
+      const fp = `${item.name.trim().toLowerCase()}|${item.month}|${item.day}|${year ?? ''}`;
+      if ((item.id && existingIds.has(item.id)) || existingFingerprints.has(fp)) {
+        skipped += 1;
+        continue;
+      }
+
+      const id = item.id || generateId();
+      existingIds.add(id);
+      existingFingerprints.add(fp);
+      events.push({
+        id,
+        type: ['birthday', 'anniversary', 'other'].includes(item.type) ? item.type : 'other',
+        customLabel: typeof item.customLabel === 'string' ? item.customLabel : '',
+        name: item.name.trim(),
+        day: item.day,
+        month: item.month,
+        year,
+        emoji: typeof item.emoji === 'string' ? item.emoji : '',
+        photo: typeof item.photo === 'string' ? item.photo : '',
+        notes: typeof item.notes === 'string' ? item.notes : ''
+      });
+      added += 1;
+    }
+
+    if (added > 0) {
+      saveEvents();
+      renderList();
+    }
+    return { added, skipped };
+  }
+
+  function encodeBase64Url(str) {
+    const bytes = new TextEncoder().encode(str);
+    let binary = '';
+    for (const b of bytes) binary += String.fromCharCode(b);
+    return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  }
+
+  function decodeBase64Url(encoded) {
+    const padded = encoded.replace(/-/g, '+').replace(/_/g, '/') + '==='.slice((encoded.length + 3) % 4);
+    const binary = atob(padded);
+    const bytes = Uint8Array.from(binary, (c) => c.charCodeAt(0));
+    return new TextDecoder().decode(bytes);
+  }
+
+  async function shareSyncLink() {
+    if (events.length === 0) {
+      showToast('No hay fechas para enviar');
+      return;
+    }
+
+    // Omit large base64 photos from URL payload to keep link compact
+    const compactEvents = events.map((e) => ({
+      id: e.id,
+      type: e.type,
+      customLabel: e.customLabel || '',
+      name: e.name,
+      day: e.day,
+      month: e.month,
+      year: e.year,
+      emoji: e.emoji || '',
+      notes: e.notes || ''
+    }));
+
+    const encoded = encodeBase64Url(JSON.stringify(compactEvents));
+    const baseUrl = `${location.origin}${location.pathname}`;
+    const syncUrl = `${baseUrl}#sync=${encoded}`;
+
+    if (navigator.share) {
+      try {
+        await navigator.share({
+          title: 'Mis Fechas Importantes',
+          text: 'Abre este enlace en tu otro dispositivo para sincronizar tus fechas:',
+          url: syncUrl
+        });
+        backupDialog.close();
+        return;
+      } catch (err) {
+        if (err && err.name === 'AbortError') return;
+      }
+    }
+
+    try {
+      await navigator.clipboard.writeText(syncUrl);
+      backupDialog.close();
+      showToast('Enlace de sincronización copiado');
+    } catch {
+      window.open(`https://wa.me/?text=${encodeURIComponent(syncUrl)}`, '_blank', 'noopener,noreferrer');
+    }
+  }
+
+  function checkUrlSyncImport() {
+    if (!location.hash.startsWith('#sync=')) return;
+    const raw = location.hash.slice('#sync='.length);
+    try {
+      const parsed = JSON.parse(decodeBase64Url(raw));
+      if (Array.isArray(parsed)) {
+        const { added, skipped } = mergeImportedEvents(parsed);
+        if (added > 0) {
+          showToast(`${added} ${added === 1 ? 'fecha sincronizada' : 'fechas sincronizadas'}`);
+        } else if (skipped > 0) {
+          showToast('Tus fechas ya estaban sincronizadas');
+        }
+      }
+    } catch {
+      showToast('El enlace de sincronización no es válido');
+    } finally {
+      history.replaceState(null, '', `${location.pathname}${location.search}`);
+    }
+  }
+
   function importJsonBackup(file) {
     if (!file) return;
     const reader = new FileReader();
@@ -887,36 +1012,14 @@
           showToast('Archivo JSON inválido');
           return;
         }
-        const valid = list.filter(isValidEvent);
-        if (valid.length === 0) {
+        const { added, skipped } = mergeImportedEvents(list);
+        if (added === 0 && skipped === 0) {
           showToast('No se encontraron fechas válidas');
           return;
         }
 
-        const existingIds = new Set(events.map((e) => e.id));
-        let added = 0;
-        for (const item of valid) {
-          const id = item.id && !existingIds.has(item.id) ? item.id : generateId();
-          existingIds.add(id);
-          events.push({
-            id,
-            type: ['birthday', 'anniversary', 'other'].includes(item.type) ? item.type : 'other',
-            customLabel: typeof item.customLabel === 'string' ? item.customLabel : '',
-            name: item.name.trim(),
-            day: item.day,
-            month: item.month,
-            year: typeof item.year === 'number' ? item.year : null,
-            emoji: typeof item.emoji === 'string' ? item.emoji : '',
-            photo: typeof item.photo === 'string' ? item.photo : '',
-            notes: typeof item.notes === 'string' ? item.notes : ''
-          });
-          added += 1;
-        }
-
-        saveEvents();
-        renderList();
         backupDialog.close();
-        showToast(`${added} fechas importadas`);
+        showToast(added > 0 ? `${added} fechas importadas` : 'Todas las fechas ya existían');
       } catch {
         showToast('No se pudo leer el archivo JSON');
       }
@@ -1200,6 +1303,7 @@
 
     // Backup dialog
     $('btn-sync').addEventListener('click', () => backupDialog.showModal());
+    $('btn-share-sync-link').addEventListener('click', shareSyncLink);
     $('btn-export-json').addEventListener('click', exportJsonBackup);
     $('import-json-input').addEventListener('change', (e) => {
       importJsonBackup(e.target.files[0]);
@@ -1368,6 +1472,7 @@
   setupDialogs();
   bindEvents();
   setupPwaInstall();
+  checkUrlSyncImport();
   renderList();
   checkDueNotifications();
   registerServiceWorker();

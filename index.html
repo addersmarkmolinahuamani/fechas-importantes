@@ -296,8 +296,15 @@
         <h2 id="backup-dialog-title" class="holo-dialog-title">Sincronizar y respaldar</h2>
       </header>
       <div class="modal-content-pad">
-        <p class="modal-intro">Tus fechas se guardan automáticamente en este navegador. Puedes exportar una copia o llevarlas a tu calendario.</p>
+        <p class="modal-intro">Las fechas se guardan localmente en cada dispositivo. Para pasarlas entre tu laptop y celular, usa el enlace rápido o un archivo de respaldo.</p>
         <div class="action-stack">
+          <button type="button" id="btn-share-sync-link" class="stack-btn">
+            <span class="stack-icon" aria-hidden="true">📲</span>
+            <div>
+              <strong>Enviar a otro dispositivo</strong>
+              <small>Comparte un enlace por WhatsApp o cópialo para abrirlo en tu laptop o celular</small>
+            </div>
+          </button>
           <button type="button" id="btn-export-json" class="stack-btn">
             <span class="stack-icon" aria-hidden="true">💾</span>
             <div>

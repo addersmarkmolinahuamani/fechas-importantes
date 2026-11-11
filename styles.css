@@ -95,6 +95,7 @@ body {
   margin: 0;
   padding: 0;
   height: 100%;
+  overflow: hidden;
   font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
   background-color: var(--bg-outer);
   color: var(--text-primary);
@@ -118,7 +119,7 @@ button {
   flex-direction: column;
   width: 100%;
   max-width: 520px;
-  height: 100dvh;
+  height: 100%;
   margin: 0 auto;
   background-color: var(--bg-surface);
   box-shadow: var(--shadow-shell);
@@ -128,7 +129,10 @@ button {
 
 @media (max-width: 540px) {
   .app-shell {
+    position: fixed;
+    inset: 0;
     max-width: 100%;
+    height: 100%;
     box-shadow: none;
   }
 }
@@ -322,7 +326,9 @@ button {
 /* Main List */
 .app-main {
   flex: 1;
+  min-height: 0;
   overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
   background-color: var(--bg-surface);
 }
 
@@ -518,7 +524,7 @@ button {
   grid-template-columns: repeat(3, 1fr);
   flex-shrink: 0;
   border-top: 1px solid rgba(0, 0, 0, 0.18);
-  padding-bottom: env(safe-area-inset-bottom, 0px);
+  z-index: 10;
 }
 
 .bottom-btn {
@@ -527,7 +533,7 @@ button {
   align-items: center;
   justify-content: center;
   gap: 3px;
-  padding: 8px 6px;
+  padding: 9px 6px calc(9px + env(safe-area-inset-bottom, 0px));
   border: none;
   color: #ffffff;
   font-size: 0.78rem;
