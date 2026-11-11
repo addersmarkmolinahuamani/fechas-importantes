@@ -1,0 +1,407 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="theme-color" content="#1a4db3">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Fechas">
+  <meta name="description" content="Aplicativo sencillo e intuitivo para registrar cumpleaños, aniversarios y fechas importantes.">
+  <title>Fechas Importantes — Cumpleaños y Aniversarios</title>
+  <link rel="icon" type="image/svg+xml" href="icon.svg">
+  <link rel="apple-touch-icon" href="icon-192.png">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="stylesheet" href="styles.css">
+  <script src="app.js" defer></script>
+</head>
+<body>
+  <div class="app-shell">
+    <!-- Top App Bar -->
+    <header class="app-header">
+      <div class="header-brand">
+        <img src="icon.svg" alt="" class="app-logo" width="30" height="30">
+        <div class="header-title-group">
+          <h1 id="header-title" class="header-title">Fechas importantes</h1>
+          <span id="header-count" class="header-count" aria-live="polite">0 guardadas</span>
+        </div>
+      </div>
+      <div class="header-actions">
+        <button type="button" id="btn-install" class="icon-btn" title="Instalar app" aria-label="Instalar aplicación" hidden>
+          <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M12 3v12"/>
+            <polyline points="7 10 12 15 17 10"/>
+            <path d="M5 21h14"/>
+          </svg>
+        </button>
+        <button type="button" id="btn-add" class="icon-btn" title="Añadir fecha" aria-label="Añadir nueva fecha">
+          <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true">
+            <path d="M12 5v14M5 12h14"/>
+          </svg>
+        </button>
+        <button type="button" id="btn-settings" class="icon-btn" title="Configuración" aria-label="Configuración">
+          <svg viewBox="0 0 24 24" width="23" height="23" fill="currentColor" aria-hidden="true">
+            <path d="M19.14 12.94c.04-.3.06-.61.06-.94s-.02-.64-.07-.94l2.03-1.58a.49.49 0 0 0 .12-.61l-1.92-3.32a.49.49 0 0 0-.59-.22l-2.39.96a7.02 7.02 0 0 0-1.62-.94l-.36-2.54a.48.48 0 0 0-.48-.41h-3.84a.48.48 0 0 0-.48.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96a.49.49 0 0 0-.59.22L2.74 8.87a.48.48 0 0 0 .12.61l2.03 1.58c-.05.3-.07.62-.07.94s.02.64.07.94l-2.03 1.58a.49.49 0 0 0-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.26.41.48.41h3.84c.24 0 .44-.17.48-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32a.49.49 0 0 0-.12-.61l-2.01-1.58zM12 15.6A3.6 3.6 0 1 1 12 8.4a3.6 3.6 0 0 1 0 7.2z"/>
+          </svg>
+        </button>
+      </div>
+    </header>
+
+    <!-- Filter Strip (shown when toggled or filtering) -->
+    <div id="filter-bar" class="filter-bar" hidden>
+      <div class="filter-chips" role="tablist" aria-label="Filtrar por tipo">
+        <button type="button" class="filter-chip is-active" data-filter="all" role="tab" aria-selected="true">Todos</button>
+        <button type="button" class="filter-chip" data-filter="birthday" role="tab" aria-selected="false">🎂 Cumpleaños</button>
+        <button type="button" class="filter-chip" data-filter="anniversary" role="tab" aria-selected="false">💍 Aniversarios</button>
+        <button type="button" class="filter-chip" data-filter="other" role="tab" aria-selected="false">⭐ Otros</button>
+      </div>
+    </div>
+
+    <!-- Search Bar (toggled by Buscar) -->
+    <div id="search-bar" class="search-bar" hidden>
+      <div class="search-input-wrap">
+        <svg class="search-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+          <circle cx="11" cy="11" r="7"/>
+          <path d="M21 21l-4.35-4.35"/>
+        </svg>
+        <input type="search" id="search-input" class="search-input" placeholder="Buscar por nombre, mes o nota..." autocomplete="off">
+        <button type="button" id="btn-clear-search" class="clear-search-btn" aria-label="Limpiar búsqueda" hidden>&times;</button>
+      </div>
+    </div>
+
+    <!-- Upcoming / Today Banner -->
+    <div id="upcoming-banner" class="upcoming-banner" hidden></div>
+
+    <!-- Main Scrollable List -->
+    <main class="app-main">
+      <ul id="events-list" class="events-list" aria-label="Lista de fechas importantes"></ul>
+
+      <!-- Empty State -->
+      <section id="empty-state" class="empty-state" hidden>
+        <div class="empty-illustration" aria-hidden="true">🎉</div>
+        <h2 id="empty-title" class="empty-title">Sin fechas registradas</h2>
+        <p id="empty-desc" class="empty-desc">
+          Guarda cumpleaños, aniversarios y fechas especiales para saber cuántos días faltan y qué edad o año cumplen.
+        </p>
+        <div class="empty-actions">
+          <button type="button" id="btn-empty-add" class="btn btn-primary">+ Añadir primera fecha</button>
+          <button type="button" id="btn-load-demo" class="btn btn-secondary">Ver ejemplos</button>
+        </div>
+      </section>
+    </main>
+
+    <!-- Bottom Action Bar -->
+    <nav class="bottom-bar" aria-label="Acciones rápidas">
+      <button type="button" id="btn-filter-toggle" class="bottom-btn bottom-btn-blue" aria-pressed="false">
+        <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/>
+        </svg>
+        <span id="filter-btn-label">Filtrar: Todos</span>
+      </button>
+      <button type="button" id="btn-search-toggle" class="bottom-btn bottom-btn-gray" aria-pressed="false">
+        <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true">
+          <circle cx="11" cy="11" r="7"/>
+          <path d="M21 21l-4.35-4.35"/>
+        </svg>
+        <span>Buscar</span>
+      </button>
+      <button type="button" id="btn-sync" class="bottom-btn bottom-btn-green">
+        <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <polyline points="23 4 23 10 17 10"/>
+          <polyline points="1 20 1 14 7 14"/>
+          <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
+        </svg>
+        <span>Sincronizar</span>
+      </button>
+    </nav>
+  </div>
+
+  <!-- Dialog 1: Elegir el tipo (matches Screenshot 2) -->
+  <dialog id="type-dialog" class="holo-dialog" aria-labelledby="type-dialog-title">
+    <div class="dialog-box">
+      <header class="holo-dialog-header">
+        <h2 id="type-dialog-title" class="holo-dialog-title">Elegir el tipo</h2>
+      </header>
+      <div class="type-list">
+        <button type="button" class="type-option" data-type="birthday">
+          <span class="type-emoji" aria-hidden="true">🎂</span>
+          <span class="type-text">Cumpleaños</span>
+        </button>
+        <button type="button" class="type-option" data-type="anniversary">
+          <span class="type-emoji" aria-hidden="true">💍</span>
+          <span class="type-text">Aniversario</span>
+        </button>
+        <button type="button" class="type-option" data-type="other">
+          <span class="type-emoji" aria-hidden="true">⭐</span>
+          <span class="type-text">Otra cosa...</span>
+        </button>
+      </div>
+      <footer class="holo-dialog-footer single-footer">
+        <button type="button" class="holo-btn" data-close-dialog="type-dialog">Cancelar</button>
+      </footer>
+    </div>
+  </dialog>
+
+  <!-- Dialog 2: Añadir / Editar fecha (includes Wheel Date Picker from Screenshot 3) -->
+  <dialog id="form-dialog" class="holo-dialog" aria-labelledby="form-dialog-title">
+    <form id="event-form" class="dialog-box" novalidate>
+      <header class="holo-dialog-header">
+        <h2 id="form-dialog-title" class="holo-dialog-title">Elegir la fecha</h2>
+      </header>
+
+      <div class="form-body">
+        <!-- Avatar + Name Row -->
+        <div class="identity-row">
+          <div class="avatar-picker-wrap">
+            <button type="button" id="btn-pick-avatar" class="avatar-preview-btn" title="Cambiar foto o ícono" aria-label="Cambiar foto o ícono">
+              <span id="form-avatar-preview" class="avatar-preview"></span>
+              <span class="avatar-edit-badge" aria-hidden="true">📷</span>
+            </button>
+            <input type="file" id="avatar-file-input" accept="image/*" hidden>
+          </div>
+          <div class="name-fields">
+            <label for="input-name" class="field-label">Nombre o título *</label>
+            <input type="text" id="input-name" class="text-input" placeholder="Ej. Hermano Renato Proleon" maxlength="80" required>
+          </div>
+        </div>
+
+        <!-- Custom label for "Otra cosa..." or type switcher when editing -->
+        <div id="custom-label-row" class="field-row" hidden>
+          <label for="input-custom-label" class="field-label">Etiqueta del evento</label>
+          <input type="text" id="input-custom-label" class="text-input" placeholder="Ej. Santo, Graduación, Cita especial" maxlength="32">
+        </div>
+
+        <!-- Emoji quick selector -->
+        <div id="emoji-strip" class="emoji-strip" hidden>
+          <span class="emoji-strip-label">Ícono:</span>
+          <div class="emoji-choices" id="emoji-choices">
+            <button type="button" class="emoji-choice" data-emoji="">Auto</button>
+            <button type="button" class="emoji-choice" data-emoji="🎂">🎂</button>
+            <button type="button" class="emoji-choice" data-emoji="🎁">🎁</button>
+            <button type="button" class="emoji-choice" data-emoji="💍">💍</button>
+            <button type="button" class="emoji-choice" data-emoji="❤️">❤️</button>
+            <button type="button" class="emoji-choice" data-emoji="🥳">🥳</button>
+            <button type="button" class="emoji-choice" data-emoji="⭐">⭐</button>
+            <button type="button" class="emoji-choice" data-emoji="🎓">🎓</button>
+            <button type="button" class="emoji-choice" data-emoji="🍼">🍼</button>
+          </div>
+          <button type="button" id="btn-upload-photo" class="mini-upload-btn">Subir foto</button>
+          <button type="button" id="btn-remove-photo" class="mini-remove-btn" hidden>Quitar foto</button>
+        </div>
+
+        <!-- Wheel Date Picker (Screenshot 3 style) -->
+        <div class="wheel-section">
+          <div class="wheel-labels" aria-hidden="true">
+            <span>Día</span>
+            <span>Mes</span>
+            <span id="wheel-year-label">Año</span>
+          </div>
+          <div class="wheel-picker" role="group" aria-label="Selector de fecha">
+            <!-- Day Wheel -->
+            <div class="wheel-col" data-wheel="day" tabindex="0" aria-label="Día">
+              <button type="button" class="wheel-step" data-dir="-1" aria-label="Día anterior"></button>
+              <div class="wheel-value" aria-live="polite">09</div>
+              <button type="button" class="wheel-step" data-dir="1" aria-label="Día siguiente"></button>
+            </div>
+            <!-- Month Wheel -->
+            <div class="wheel-col" data-wheel="month" tabindex="0" aria-label="Mes">
+              <button type="button" class="wheel-step" data-dir="-1" aria-label="Mes anterior"></button>
+              <div class="wheel-value" aria-live="polite">nov</div>
+              <button type="button" class="wheel-step" data-dir="1" aria-label="Mes siguiente"></button>
+            </div>
+            <!-- Year Wheel -->
+            <div class="wheel-col" id="wheel-col-year" data-wheel="year" tabindex="0" aria-label="Año">
+              <button type="button" class="wheel-step" data-dir="-1" aria-label="Año anterior"></button>
+              <div class="wheel-value" aria-live="polite">1995</div>
+              <button type="button" class="wheel-step" data-dir="1" aria-label="Año siguiente"></button>
+            </div>
+          </div>
+          <p class="wheel-hint">Desliza, usa la rueda o toca arriba/abajo para cambiar</p>
+        </div>
+
+        <!-- Checkbox "Sin año" (exact wording from Screenshot 3) -->
+        <label class="no-year-check">
+          <input type="checkbox" id="input-no-year">
+          <span><strong>Sin año:</strong> Seleccione esta opción si no sabe el año.</span>
+        </label>
+
+        <!-- Optional Notes -->
+        <div class="field-row">
+          <label for="input-notes" class="field-label">Nota / idea de regalo (opcional)</label>
+          <input type="text" id="input-notes" class="text-input" placeholder="Ej. Talla M, le gusta el café..." maxlength="120">
+        </div>
+
+        <p id="form-error" class="form-error" role="alert" hidden></p>
+      </div>
+
+      <footer class="holo-dialog-footer split-footer">
+        <button type="button" class="holo-btn" data-close-dialog="form-dialog">Cancelar</button>
+        <button type="submit" id="btn-form-submit" class="holo-btn holo-btn-primary">Añadir</button>
+      </footer>
+    </form>
+  </dialog>
+
+  <!-- Dialog 3: Detalles del evento -->
+  <dialog id="detail-dialog" class="holo-dialog" aria-labelledby="detail-name">
+    <div class="dialog-box">
+      <header class="detail-header">
+        <div id="detail-avatar" class="detail-avatar"></div>
+        <div class="detail-meta">
+          <span id="detail-type-badge" class="detail-badge">Cumpleaños</span>
+          <h2 id="detail-name" class="detail-name">Nombre</h2>
+          <p id="detail-date" class="detail-date">15 nov 1995</p>
+        </div>
+      </header>
+
+      <div class="detail-body">
+        <div class="detail-stats">
+          <div class="stat-card">
+            <span class="stat-label">Cuenta regresiva</span>
+            <strong id="detail-countdown" class="stat-value">quedan 6 días</strong>
+          </div>
+          <div class="stat-card" id="detail-age-card">
+            <span id="detail-age-label" class="stat-label">Cumplirá</span>
+            <strong id="detail-age-value" class="stat-value">31</strong>
+          </div>
+        </div>
+        <p id="detail-notes" class="detail-notes" hidden></p>
+
+        <div class="detail-quick-actions">
+          <button type="button" id="btn-copy-greeting" class="btn btn-secondary btn-sm">📋 Copiar felicitación</button>
+          <a id="btn-whatsapp" class="btn btn-whatsapp btn-sm" target="_blank" rel="noopener noreferrer">💬 WhatsApp</a>
+        </div>
+
+        <div id="delete-confirm-box" class="delete-confirm-box" hidden>
+          <p>¿Eliminar esta fecha permanentemente?</p>
+          <div class="delete-confirm-actions">
+            <button type="button" id="btn-cancel-delete" class="btn btn-secondary btn-sm">No, cancelar</button>
+            <button type="button" id="btn-confirm-delete" class="btn btn-danger btn-sm">Sí, eliminar</button>
+          </div>
+        </div>
+      </div>
+
+      <footer class="holo-dialog-footer three-footer">
+        <button type="button" id="btn-detail-delete" class="holo-btn holo-btn-danger">Eliminar</button>
+        <button type="button" id="btn-detail-edit" class="holo-btn holo-btn-primary">Editar</button>
+        <button type="button" class="holo-btn" data-close-dialog="detail-dialog">Cerrar</button>
+      </footer>
+    </div>
+  </dialog>
+
+  <!-- Dialog 4: Sincronizar / Respaldar -->
+  <dialog id="backup-dialog" class="holo-dialog" aria-labelledby="backup-dialog-title">
+    <div class="dialog-box">
+      <header class="holo-dialog-header">
+        <h2 id="backup-dialog-title" class="holo-dialog-title">Sincronizar y respaldar</h2>
+      </header>
+      <div class="modal-content-pad">
+        <p class="modal-intro">Tus fechas se guardan automáticamente en este navegador. Puedes exportar una copia o llevarlas a tu calendario.</p>
+        <div class="action-stack">
+          <button type="button" id="btn-export-json" class="stack-btn">
+            <span class="stack-icon" aria-hidden="true">💾</span>
+            <div>
+              <strong>Exportar copia (.json)</strong>
+              <small>Guarda un respaldo completo con fotos y notas</small>
+            </div>
+          </button>
+          <label class="stack-btn stack-btn-file">
+            <span class="stack-icon" aria-hidden="true">📂</span>
+            <div>
+              <strong>Importar copia (.json)</strong>
+              <small>Combina fechas desde un archivo guardado</small>
+            </div>
+            <input type="file" id="import-json-input" accept=".json,application/json" hidden>
+          </label>
+          <button type="button" id="btn-export-ics" class="stack-btn">
+            <span class="stack-icon" aria-hidden="true">📅</span>
+            <div>
+              <strong>Exportar al calendario (.ics)</strong>
+              <small>Compatible con Google Calendar, Apple y Outlook</small>
+            </div>
+          </button>
+        </div>
+      </div>
+      <footer class="holo-dialog-footer single-footer">
+        <button type="button" class="holo-btn" data-close-dialog="backup-dialog">Cerrar</button>
+      </footer>
+    </div>
+  </dialog>
+
+  <!-- Dialog 5: Configuración -->
+  <dialog id="settings-dialog" class="holo-dialog" aria-labelledby="settings-dialog-title">
+    <div class="dialog-box">
+      <header class="holo-dialog-header">
+        <h2 id="settings-dialog-title" class="holo-dialog-title">Configuración</h2>
+      </header>
+      <div class="modal-content-pad settings-list">
+        <div class="setting-item">
+          <label for="setting-theme" class="setting-label">
+            <strong>Tema visual</strong>
+            <small>Claro, oscuro o según tu sistema</small>
+          </label>
+          <select id="setting-theme" class="setting-select">
+            <option value="auto">Automático</option>
+            <option value="light">Claro</option>
+            <option value="dark">Oscuro</option>
+          </select>
+        </div>
+
+        <div class="setting-item">
+          <label for="setting-lead-days" class="setting-label">
+            <strong>Aviso anticipado</strong>
+            <small>Resaltar fechas próximas en la lista</small>
+          </label>
+          <select id="setting-lead-days" class="setting-select">
+            <option value="0">Solo el mismo día</option>
+            <option value="1">1 día antes</option>
+            <option value="3">3 días antes</option>
+            <option value="7">7 días antes</option>
+          </select>
+        </div>
+
+        <div class="setting-item">
+          <div class="setting-label">
+            <strong>Notificaciones del navegador</strong>
+            <small id="notif-status-text">Recibe un aviso al abrir el app</small>
+          </div>
+          <button type="button" id="btn-enable-notif" class="btn btn-secondary btn-sm">Activar</button>
+        </div>
+
+        <div class="setting-item">
+          <div class="setting-label">
+            <strong>Instalar en dispositivo</strong>
+            <small id="install-status-text">Úsala como app nativa en laptop o celular</small>
+          </div>
+          <button type="button" id="btn-settings-install" class="btn btn-primary btn-sm">Instalar</button>
+        </div>
+
+        <hr class="setting-divider">
+
+        <div class="setting-item">
+          <div class="setting-label">
+            <strong>Datos de demostración</strong>
+            <small>Añadir ejemplos para probar el listado</small>
+          </div>
+          <button type="button" id="btn-settings-demo" class="btn btn-secondary btn-sm">Cargar</button>
+        </div>
+
+        <div class="setting-item">
+          <div class="setting-label">
+            <strong>Borrar todo</strong>
+            <small>Elimina todas las fechas guardadas</small>
+          </div>
+          <button type="button" id="btn-clear-all" class="btn btn-danger btn-sm">Borrar</button>
+        </div>
+      </div>
+      <footer class="holo-dialog-footer single-footer">
+        <button type="button" class="holo-btn" data-close-dialog="settings-dialog">Cerrar</button>
+      </footer>
+    </div>
+  </dialog>
+
+  <!-- Toast -->
+  <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+</body>
+</html>
+
