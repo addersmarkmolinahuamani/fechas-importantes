@@ -4,6 +4,7 @@
   const STORAGE_KEY = 'fechas_importantes_v1';
   const SETTINGS_KEY = 'fechas_importantes_settings_v1';
   const PENDING_SYNC_KEY = 'fechas_importantes_pending_v1';
+  const SYNCED_USER_KEY = 'fechas_importantes_synced_user_v1';
   const SUPABASE_URL = 'https://jzwjudqysrnhevpcqjqu.supabase.co';
   const SUPABASE_KEY = 'sb_publishable_rkZVJt0njBc3MNX6dc5Zaw_G4HgKk4D';
   const SUPABASE_TABLE = 'fechas_importantes';
@@ -1689,11 +1690,21 @@
       const remoteIds = new Set(remoteList.map((r) => r.id));
       const remoteFps = new Set(remoteList.map(eventFingerprint));
 
-      // 3. Push queued upserts + any local items not yet in cloud
+      // 3. Push queued upserts (and un-synced local items ONLY on first sync for this user)
+      let isFirstSyncForUser = true;
+      try {
+        isFirstSyncForUser = localStorage.getItem(SYNCED_USER_KEY) !== userId;
+      } catch {
+        isFirstSyncForUser = true;
+      }
+
       const toUpsert = [];
       for (const ev of events) {
         const isQueued = Boolean(pendingOps.upserts[ev.id]);
-        const isMissingInCloud = !remoteIds.has(ev.id) && !remoteFps.has(eventFingerprint(ev));
+        const isMissingInCloud =
+          isFirstSyncForUser &&
+          !remoteIds.has(ev.id) &&
+          !remoteFps.has(eventFingerprint(ev));
         if (isQueued || isMissingInCloud) {
           toUpsert.push(toDbRow(ev, userId));
         }
@@ -1708,6 +1719,11 @@
 
       pendingOps.upserts = {};
       savePendingOps();
+      try {
+        localStorage.setItem(SYNCED_USER_KEY, userId);
+      } catch {
+        // Ignore storage error
+      }
 
       // 4. Refresh final merged cloud list if we uploaded anything
       let finalList = remoteList;
@@ -1894,6 +1910,11 @@
     await supabaseClient.auth.signOut();
     currentSession = null;
     pendingOps = { upserts: {}, deletes: {} };
+    try {
+      localStorage.removeItem(SYNCED_USER_KEY);
+    } catch {
+      // Ignore storage error
+    }
     savePendingOps();
     setCloudMessage('');
     updateCloudUI();

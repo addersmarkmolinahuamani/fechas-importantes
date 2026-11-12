@@ -72,6 +72,8 @@ create policy "fechas_delete_own"
   to authenticated
   using ((select auth.uid()) = user_id);
 
+alter table public.fechas_importantes replica identity full;
+
 do $$
 begin
   alter publication supabase_realtime add table public.fechas_importantes;
@@ -79,3 +81,4 @@ exception
   when duplicate_object then null;
 end;
 $$;
+
