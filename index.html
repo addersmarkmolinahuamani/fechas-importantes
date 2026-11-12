@@ -14,6 +14,7 @@
   <link rel="apple-touch-icon" href="icon-192.png">
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="stylesheet" href="styles.css">
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.119.0/dist/umd/supabase.min.js" defer></script>
   <script src="app.js" defer></script>
 </head>
 <body>
@@ -28,6 +29,12 @@
         </div>
       </div>
       <div class="header-actions">
+        <button type="button" id="btn-cloud" class="icon-btn cloud-btn" title="Sincronización en la nube" aria-label="Sincronización en la nube">
+          <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z"/>
+          </svg>
+          <span id="cloud-dot" class="cloud-dot" hidden></span>
+        </button>
         <button type="button" id="btn-install" class="icon-btn" title="Instalar app" aria-label="Instalar aplicación" hidden>
           <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
             <path d="M12 3v12"/>
@@ -296,7 +303,48 @@
         <h2 id="backup-dialog-title" class="holo-dialog-title">Sincronizar y respaldar</h2>
       </header>
       <div class="modal-content-pad">
-        <p class="modal-intro">Las fechas se guardan localmente en cada dispositivo. Para pasarlas entre tu laptop y celular, usa el enlace rápido o un archivo de respaldo.</p>
+        <!-- Cloud Sync Section (Supabase) -->
+        <section class="cloud-card" aria-label="Sincronización en la nube">
+          <div class="cloud-card-head">
+            <span class="cloud-badge-icon" aria-hidden="true">☁️</span>
+            <div>
+              <strong>Sincronización en la nube</strong>
+              <small id="cloud-subtitle">Inicia sesión con el mismo correo en tu laptop y celular</small>
+            </div>
+          </div>
+
+          <div id="cloud-auth-box" class="cloud-auth-box">
+            <div class="field-row">
+              <label for="auth-email" class="field-label">Correo electrónico</label>
+              <input type="email" id="auth-email" class="text-input" placeholder="tucorreo@gmail.com" autocomplete="email">
+            </div>
+            <div class="field-row">
+              <label for="auth-password" class="field-label">Contraseña (mín. 6 caracteres)</label>
+              <input type="password" id="auth-password" class="text-input" placeholder="••••••••" autocomplete="current-password">
+            </div>
+            <div class="cloud-auth-actions">
+              <button type="button" id="btn-auth-signin" class="btn btn-primary btn-sm">Iniciar sesión</button>
+              <button type="button" id="btn-auth-signup" class="btn btn-secondary btn-sm">Crear cuenta</button>
+            </div>
+            <button type="button" id="btn-auth-magic" class="link-btn">O enviar enlace mágico sin contraseña</button>
+          </div>
+
+          <div id="cloud-account-box" class="cloud-account-box" hidden>
+            <div class="cloud-user-info">
+              <span class="cloud-status-pill" id="cloud-status-pill">Conectado</span>
+              <span id="cloud-user-email" class="cloud-user-email"></span>
+            </div>
+            <div class="cloud-auth-actions">
+              <button type="button" id="btn-cloud-sync-now" class="btn btn-primary btn-sm">🔄 Sincronizar ahora</button>
+              <button type="button" id="btn-auth-signout" class="btn btn-secondary btn-sm">Cerrar sesión</button>
+            </div>
+          </div>
+
+          <p id="cloud-message" class="cloud-message" role="status" hidden></p>
+        </section>
+
+        <hr class="setting-divider" style="margin: 14px 0;">
+
         <div class="action-stack">
           <button type="button" id="btn-share-sync-link" class="stack-btn">
             <span class="stack-icon" aria-hidden="true">📲</span>

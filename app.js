@@ -3,6 +3,10 @@
 
   const STORAGE_KEY = 'fechas_importantes_v1';
   const SETTINGS_KEY = 'fechas_importantes_settings_v1';
+  const PENDING_SYNC_KEY = 'fechas_importantes_pending_v1';
+  const SUPABASE_URL = 'https://jzwjudqysrnhevpcqjqu.supabase.co';
+  const SUPABASE_KEY = 'sb_publishable_rkZVJt0njBc3MNX6dc5Zaw_G4HgKk4D';
+  const SUPABASE_TABLE = 'fechas_importantes';
   const MONTHS_SHORT = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
   const MONTHS_FULL = [
     'enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio',
@@ -48,6 +52,11 @@
   let currentDetailId = null;
   let clearAllArmed = false;
   let deferredInstallPrompt = null;
+  let supabaseClient = null;
+  let currentSession = null;
+  let realtimeChannel = null;
+  let isSyncing = false;
+  let pendingOps = { upserts: {}, deletes: {} };
 
   const formDraft = {
     type: 'birthday',
@@ -197,12 +206,22 @@
       if (raw) {
         const parsed = JSON.parse(raw);
         if (Array.isArray(parsed)) {
-          events = parsed.filter(isValidEvent);
+          let migratedIds = false;
+          events = parsed.filter(isValidEvent).map((ev) => {
+            if (!isUuid(ev.id)) {
+              migratedIds = true;
+              return { ...ev, id: generateId() };
+            }
+            return ev;
+          });
+          if (migratedIds) saveEvents();
         }
       }
     } catch {
       events = [];
     }
+
+    loadPendingOps();
 
     try {
       const rawSettings = localStorage.getItem(SETTINGS_KEY);
@@ -245,11 +264,57 @@
     );
   }
 
+  function isUuid(value) {
+    return typeof value === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
+  }
+
   function generateId() {
     if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
       return crypto.randomUUID();
     }
-    return `ev_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+      const r = (Math.random() * 16) | 0;
+      const v = c === 'x' ? r : (r & 0x3) | 0x8;
+      return v.toString(16);
+    });
+  }
+
+  function loadPendingOps() {
+    try {
+      const raw = localStorage.getItem(PENDING_SYNC_KEY);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        pendingOps = {
+          upserts: parsed && typeof parsed.upserts === 'object' ? parsed.upserts : {},
+          deletes: parsed && typeof parsed.deletes === 'object' ? parsed.deletes : {}
+        };
+      }
+    } catch {
+      pendingOps = { upserts: {}, deletes: {} };
+    }
+  }
+
+  function savePendingOps() {
+    try {
+      localStorage.setItem(PENDING_SYNC_KEY, JSON.stringify(pendingOps));
+    } catch {
+      // Ignore storage error
+    }
+    updateCloudUI();
+  }
+
+  function queueUpsert(id) {
+    if (!currentSession) return;
+    delete pendingOps.deletes[id];
+    pendingOps.upserts[id] = true;
+    savePendingOps();
+  }
+
+  function queueDelete(id) {
+    if (!currentSession) return;
+    delete pendingOps.upserts[id];
+    pendingOps.deletes[id] = true;
+    savePendingOps();
   }
 
   // --- Theme & Notifications ---
@@ -759,6 +824,8 @@
     }
 
     saveEvents();
+    queueUpsert(payload.id);
+    syncWithCloud();
     renderList();
     formDialog.close();
   }
@@ -896,7 +963,7 @@
         continue;
       }
 
-      const id = item.id || generateId();
+      const id = isUuid(item.id) ? item.id : generateId();
       existingIds.add(id);
       existingFingerprints.add(fp);
       events.push({
@@ -911,11 +978,13 @@
         photo: typeof item.photo === 'string' ? item.photo : '',
         notes: typeof item.notes === 'string' ? item.notes : ''
       });
+      queueUpsert(id);
       added += 1;
     }
 
     if (added > 0) {
       saveEvents();
+      syncWithCloud();
       renderList();
     }
     return { added, skipped };
@@ -1142,7 +1211,9 @@
     ];
 
     events = [...events, ...demos];
+    for (const d of demos) queueUpsert(d.id);
     saveEvents();
+    syncWithCloud();
     renderList();
     showToast('Ejemplos cargados');
   }
@@ -1294,15 +1365,28 @@
     });
 
     $('btn-confirm-delete').addEventListener('click', () => {
-      events = events.filter((item) => item.id !== currentDetailId);
+      const deletedId = currentDetailId;
+      events = events.filter((item) => item.id !== deletedId);
       saveEvents();
+      queueDelete(deletedId);
+      syncWithCloud();
       renderList();
       detailDialog.close();
       showToast('Fecha eliminada');
     });
 
-    // Backup dialog
-    $('btn-sync').addEventListener('click', () => backupDialog.showModal());
+    // Backup & Cloud Sync dialog
+    const openSyncDialog = () => {
+      updateCloudUI();
+      backupDialog.showModal();
+    };
+    $('btn-sync').addEventListener('click', openSyncDialog);
+    $('btn-cloud').addEventListener('click', openSyncDialog);
+    $('btn-auth-signin').addEventListener('click', signInWithEmail);
+    $('btn-auth-signup').addEventListener('click', signUpWithEmail);
+    $('btn-auth-magic').addEventListener('click', signInWithMagicLink);
+    $('btn-auth-signout').addEventListener('click', signOutCloud);
+    $('btn-cloud-sync-now').addEventListener('click', () => syncWithCloud({ manual: true }));
     $('btn-share-sync-link').addEventListener('click', shareSyncLink);
     $('btn-export-json').addEventListener('click', exportJsonBackup);
     $('import-json-input').addEventListener('change', (e) => {
@@ -1376,8 +1460,10 @@
         $('btn-clear-all').textContent = '¿Confirmar?';
         return;
       }
+      for (const ev of events) queueDelete(ev.id);
       events = [];
       saveEvents();
+      syncWithCloud();
       renderList();
       settingsDialog.close();
       showToast('Todas las fechas fueron eliminadas');
@@ -1458,6 +1544,415 @@
     updateInstallUI();
   }
 
+  // --- Supabase Cloud Sync & Auth ---
+
+  function setCloudMessage(text, isError = false) {
+    const msgEl = $('cloud-message');
+    if (!text) {
+      msgEl.hidden = true;
+      msgEl.textContent = '';
+      msgEl.classList.remove('is-error');
+      return;
+    }
+    msgEl.textContent = text;
+    msgEl.classList.toggle('is-error', isError);
+    msgEl.hidden = false;
+  }
+
+  function hasPendingChanges() {
+    return (
+      Object.keys(pendingOps.upserts).length > 0 ||
+      Object.keys(pendingOps.deletes).length > 0
+    );
+  }
+
+  function updateCloudUI() {
+    const cloudDot = $('cloud-dot');
+    const authBox = $('cloud-auth-box');
+    const accountBox = $('cloud-account-box');
+    const userEmailEl = $('cloud-user-email');
+    const statusPill = $('cloud-status-pill');
+    const subtitle = $('cloud-subtitle');
+
+    if (currentSession && currentSession.user) {
+      const pending = hasPendingChanges();
+      cloudDot.hidden = false;
+      cloudDot.classList.toggle('is-pending', pending || !navigator.onLine);
+      authBox.hidden = true;
+      accountBox.hidden = false;
+      userEmailEl.textContent = currentSession.user.email || 'Usuario conectado';
+      if (!navigator.onLine) {
+        statusPill.textContent = 'Sin conexión';
+        statusPill.classList.add('is-warning');
+        subtitle.textContent = 'Tus cambios se subirán apenas vuelva el internet';
+      } else if (pending) {
+        statusPill.textContent = 'Pendiente';
+        statusPill.classList.add('is-warning');
+        subtitle.textContent = 'Sincronizando cambios pendientes...';
+      } else {
+        statusPill.textContent = 'Sincronizado';
+        statusPill.classList.remove('is-warning');
+        subtitle.textContent = 'Laptop y celular conectados en tiempo real';
+      }
+    } else {
+      cloudDot.hidden = true;
+      authBox.hidden = false;
+      accountBox.hidden = true;
+      subtitle.textContent = 'Inicia sesión con el mismo correo en tu laptop y celular';
+    }
+  }
+
+  function translateSupabaseError(err) {
+    const msg = (err && err.message) || '';
+    const code = (err && err.code) || '';
+    if (code === '42P01' || code === 'PGRST205' || msg.includes('fechas_importantes')) {
+      return 'Falta crear la tabla en Supabase: ejecuta el SQL en tu SQL Editor de Supabase.';
+    }
+    if (msg.includes('Invalid login credentials')) {
+      return 'Correo o contraseña incorrectos.';
+    }
+    if (msg.includes('Email not confirmed')) {
+      return 'Tu correo aún no está confirmado. Revisa tu bandeja o carpeta de spam.';
+    }
+    if (msg.includes('User already registered')) {
+      return 'Ese correo ya tiene cuenta. Pulsa "Iniciar sesión".';
+    }
+    if (msg.includes('Password should be at least')) {
+      return 'La contraseña debe tener al menos 6 caracteres.';
+    }
+    return msg || 'Error al conectar con Supabase.';
+  }
+
+  function toDbRow(ev, userId) {
+    return {
+      id: ev.id,
+      user_id: userId,
+      type: ev.type,
+      custom_label: ev.customLabel || '',
+      name: ev.name,
+      day: ev.day,
+      month: ev.month,
+      year: typeof ev.year === 'number' ? ev.year : null,
+      emoji: ev.emoji || '',
+      photo: ev.photo || '',
+      notes: ev.notes || ''
+    };
+  }
+
+  function fromDbRow(row) {
+    return {
+      id: row.id,
+      type: ['birthday', 'anniversary', 'other'].includes(row.type) ? row.type : 'other',
+      customLabel: row.custom_label || '',
+      name: row.name,
+      day: Number(row.day),
+      month: Number(row.month),
+      year: typeof row.year === 'number' ? row.year : null,
+      emoji: row.emoji || '',
+      photo: row.photo || '',
+      notes: row.notes || ''
+    };
+  }
+
+  function eventFingerprint(ev) {
+    return `${ev.name.trim().toLowerCase()}|${ev.month}|${ev.day}|${ev.year ?? ''}`;
+  }
+
+  async function syncWithCloud({ manual = false } = {}) {
+    if (!supabaseClient || !currentSession || !currentSession.user || !navigator.onLine || isSyncing) {
+      updateCloudUI();
+      return;
+    }
+
+    isSyncing = true;
+    try {
+      const userId = currentSession.user.id;
+
+      // 1. Flush queued deletions
+      const deleteIds = Object.keys(pendingOps.deletes);
+      if (deleteIds.length > 0) {
+        const { error: delErr } = await supabaseClient
+          .from(SUPABASE_TABLE)
+          .delete()
+          .in('id', deleteIds);
+        if (delErr) throw delErr;
+        pendingOps.deletes = {};
+      }
+
+      // 2. Fetch current cloud rows
+      const { data: remoteRows, error: fetchErr } = await supabaseClient
+        .from(SUPABASE_TABLE)
+        .select('id,type,custom_label,name,day,month,year,emoji,photo,notes');
+      if (fetchErr) throw fetchErr;
+
+      const remoteList = (remoteRows || []).map(fromDbRow);
+      const remoteIds = new Set(remoteList.map((r) => r.id));
+      const remoteFps = new Set(remoteList.map(eventFingerprint));
+
+      // 3. Push queued upserts + any local items not yet in cloud
+      const toUpsert = [];
+      for (const ev of events) {
+        const isQueued = Boolean(pendingOps.upserts[ev.id]);
+        const isMissingInCloud = !remoteIds.has(ev.id) && !remoteFps.has(eventFingerprint(ev));
+        if (isQueued || isMissingInCloud) {
+          toUpsert.push(toDbRow(ev, userId));
+        }
+      }
+
+      if (toUpsert.length > 0) {
+        const { error: upErr } = await supabaseClient
+          .from(SUPABASE_TABLE)
+          .upsert(toUpsert, { onConflict: 'id' });
+        if (upErr) throw upErr;
+      }
+
+      pendingOps.upserts = {};
+      savePendingOps();
+
+      // 4. Refresh final merged cloud list if we uploaded anything
+      let finalList = remoteList;
+      if (toUpsert.length > 0) {
+        const { data: refreshed, error: refErr } = await supabaseClient
+          .from(SUPABASE_TABLE)
+          .select('id,type,custom_label,name,day,month,year,emoji,photo,notes');
+        if (refErr) throw refErr;
+        finalList = (refreshed || []).map(fromDbRow);
+      }
+
+      events = finalList;
+      saveEvents();
+      renderList();
+      setCloudMessage('');
+      if (manual) {
+        showToast('Sincronización completada');
+      }
+    } catch (err) {
+      setCloudMessage(translateSupabaseError(err), true);
+      if (manual) {
+        showToast('No se pudo sincronizar');
+      }
+    } finally {
+      isSyncing = false;
+      updateCloudUI();
+    }
+  }
+
+  function unsubscribeRealtime() {
+    if (supabaseClient && realtimeChannel) {
+      supabaseClient.removeChannel(realtimeChannel);
+      realtimeChannel = null;
+    }
+  }
+
+  function subscribeRealtime(userId) {
+    unsubscribeRealtime();
+    if (!supabaseClient || !userId) return;
+
+    realtimeChannel = supabaseClient
+      .channel(`fechas_sync_${userId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: SUPABASE_TABLE,
+          filter: `user_id=eq.${userId}`
+        },
+        (payload) => {
+          if (payload.eventType === 'DELETE') {
+            const oldId = payload.old && payload.old.id;
+            if (!oldId) return;
+            events = events.filter((e) => e.id !== oldId);
+            saveEvents();
+            renderList();
+            return;
+          }
+
+          if (payload.new) {
+            const incoming = fromDbRow(payload.new);
+            if (pendingOps.deletes[incoming.id]) return;
+            const idx = events.findIndex((e) => e.id === incoming.id);
+            if (idx === -1) {
+              events.push(incoming);
+            } else {
+              events[idx] = incoming;
+            }
+            saveEvents();
+            renderList();
+          }
+        }
+      )
+      .subscribe();
+  }
+
+  function getAuthCredentials() {
+    const email = $('auth-email').value.trim();
+    const password = $('auth-password').value;
+    if (!email) {
+      setCloudMessage('Escribe tu correo electrónico.', true);
+      $('auth-email').focus();
+      return null;
+    }
+    return { email, password };
+  }
+
+  async function signInWithEmail() {
+    if (!supabaseClient) {
+      setCloudMessage('Necesitas conexión a internet para iniciar sesión.', true);
+      return;
+    }
+    const creds = getAuthCredentials();
+    if (!creds) return;
+    if (!creds.password) {
+      setCloudMessage('Escribe tu contraseña.', true);
+      $('auth-password').focus();
+      return;
+    }
+
+    setCloudMessage('Iniciando sesión...');
+    const { data, error } = await supabaseClient.auth.signInWithPassword(creds);
+    if (error) {
+      setCloudMessage(translateSupabaseError(error), true);
+      return;
+    }
+    currentSession = data.session;
+    setCloudMessage('');
+    updateCloudUI();
+    if (currentSession) {
+      subscribeRealtime(currentSession.user.id);
+      await syncWithCloud({ manual: true });
+    }
+  }
+
+  async function signUpWithEmail() {
+    if (!supabaseClient) {
+      setCloudMessage('Necesitas conexión a internet para crear una cuenta.', true);
+      return;
+    }
+    const creds = getAuthCredentials();
+    if (!creds) return;
+    if (creds.password.length < 6) {
+      setCloudMessage('La contraseña debe tener al menos 6 caracteres.', true);
+      $('auth-password').focus();
+      return;
+    }
+
+    setCloudMessage('Creando cuenta...');
+    const redirectTo = location.protocol.startsWith('http')
+      ? `${location.origin}${location.pathname}`
+      : undefined;
+
+    const { data, error } = await supabaseClient.auth.signUp({
+      email: creds.email,
+      password: creds.password,
+      options: redirectTo ? { emailRedirectTo: redirectTo } : undefined
+    });
+
+    if (error) {
+      setCloudMessage(translateSupabaseError(error), true);
+      return;
+    }
+
+    if (data.session) {
+      currentSession = data.session;
+      setCloudMessage('');
+      updateCloudUI();
+      subscribeRealtime(currentSession.user.id);
+      await syncWithCloud({ manual: true });
+    } else {
+      setCloudMessage('¡Cuenta creada! Revisa tu correo para confirmar el enlace y luego inicia sesión.');
+    }
+  }
+
+  async function signInWithMagicLink() {
+    if (!supabaseClient) {
+      setCloudMessage('Necesitas conexión a internet para enviar el enlace.', true);
+      return;
+    }
+    const creds = getAuthCredentials();
+    if (!creds) return;
+
+    setCloudMessage('Enviando enlace mágico...');
+    const redirectTo = location.protocol.startsWith('http')
+      ? `${location.origin}${location.pathname}`
+      : undefined;
+
+    const { error } = await supabaseClient.auth.signInWithOtp({
+      email: creds.email,
+      options: redirectTo ? { emailRedirectTo: redirectTo } : undefined
+    });
+    if (error) {
+      setCloudMessage(translateSupabaseError(error), true);
+      return;
+    }
+    setCloudMessage('Enlace enviado. Ábrelo desde este dispositivo para iniciar sesión automáticamente.');
+  }
+
+  async function signOutCloud() {
+    if (!supabaseClient) return;
+    unsubscribeRealtime();
+    await supabaseClient.auth.signOut();
+    currentSession = null;
+    pendingOps = { upserts: {}, deletes: {} };
+    savePendingOps();
+    setCloudMessage('');
+    updateCloudUI();
+    showToast('Sesión cerrada');
+  }
+
+  async function initSupabase() {
+    if (!window.supabase || typeof window.supabase.createClient !== 'function') {
+      updateCloudUI();
+      return;
+    }
+
+    supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY, {
+      auth: {
+        persistSession: true,
+        autoRefreshToken: true,
+        detectSessionInUrl: true
+      }
+    });
+
+    const { data } = await supabaseClient.auth.getSession();
+    currentSession = data ? data.session : null;
+    updateCloudUI();
+
+    if (currentSession && currentSession.user) {
+      subscribeRealtime(currentSession.user.id);
+      syncWithCloud();
+    }
+
+    supabaseClient.auth.onAuthStateChange((_event, session) => {
+      const prevUserId = currentSession && currentSession.user ? currentSession.user.id : null;
+      currentSession = session;
+      const nextUserId = session && session.user ? session.user.id : null;
+
+      updateCloudUI();
+      if (nextUserId && nextUserId !== prevUserId) {
+        subscribeRealtime(nextUserId);
+        syncWithCloud();
+      } else if (!nextUserId) {
+        unsubscribeRealtime();
+      }
+    });
+
+    window.addEventListener('online', () => {
+      updateCloudUI();
+      syncWithCloud();
+    });
+
+    window.addEventListener('offline', () => {
+      updateCloudUI();
+    });
+
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible') {
+        syncWithCloud();
+      }
+    });
+  }
+
   // --- Init ---
 
   function registerServiceWorker() {
@@ -1476,5 +1971,6 @@
   renderList();
   checkDueNotifications();
   registerServiceWorker();
+  initSupabase();
 })();
 

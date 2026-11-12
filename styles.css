@@ -1239,6 +1239,127 @@ dialog.holo-dialog::backdrop {
   margin: 2px 0;
 }
 
+/* Cloud Sync Card & Header Indicator */
+.cloud-btn {
+  position: relative;
+}
+
+.cloud-dot {
+  position: absolute;
+  top: 7px;
+  right: 7px;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: #22c55e;
+  border: 2px solid #1644a3;
+}
+
+.cloud-dot.is-pending {
+  background: #f59e0b;
+}
+
+.cloud-card {
+  padding: 12px 14px;
+  border-radius: 10px;
+  background: var(--bg-subtle);
+  border: 1px solid var(--border-color);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.cloud-card-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.cloud-badge-icon {
+  font-size: 1.45rem;
+  flex-shrink: 0;
+}
+
+.cloud-card-head strong {
+  display: block;
+  font-size: 0.96rem;
+}
+
+.cloud-card-head small {
+  display: block;
+  font-size: 0.78rem;
+  color: var(--text-muted);
+}
+
+.cloud-auth-box,
+.cloud-account-box {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.cloud-auth-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.cloud-auth-actions .btn {
+  flex: 1;
+}
+
+.cloud-user-info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.cloud-status-pill {
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: #16a34a;
+  color: #ffffff;
+  font-size: 0.74rem;
+  font-weight: 700;
+}
+
+.cloud-status-pill.is-warning {
+  background: #d97706;
+}
+
+.cloud-user-email {
+  font-size: 0.86rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  word-break: break-all;
+}
+
+.link-btn {
+  border: none;
+  background: transparent;
+  padding: 2px 0;
+  color: var(--holo-blue);
+  font-size: 0.82rem;
+  font-weight: 600;
+  text-align: left;
+  text-decoration: underline;
+}
+
+.cloud-message {
+  margin: 0;
+  padding: 8px 10px;
+  border-radius: 7px;
+  background: var(--accent-soon-bg);
+  color: var(--accent-soon-text);
+  font-size: 0.82rem;
+  line-height: 1.35;
+}
+
+.cloud-message.is-error {
+  background: var(--danger-bg);
+  color: var(--danger);
+}
+
 /* Toast */
 .toast {
   position: fixed;
